@@ -100,10 +100,12 @@ history_days = sorted(
     reverse=True
 )
 
+BASE = "/hn-daily-digest"
+
 # Build dropdown options for the date picker
-dropdown_options = '<option value="history/index.html">All history</option>\n'
+dropdown_options = f'<option value="{BASE}/history/index.html">All history</option>\n'
 for day in history_days:
-    dropdown_options += f'<option value="history/{day}/index.html">{day}</option>\n'
+    dropdown_options += f'<option value="{BASE}/history/{day}/index.html">{day}</option>\n'
 
 cards = ""
 for i, item in enumerate(top50, 1):
@@ -183,7 +185,7 @@ footer a{{color:#ff6600;text-decoration:none}}
 </head>
 <body>
 <header>
-  <a href="index.html" class="home">
+  <a href="{BASE}/index.html" class="home">
     <div class="logo">Y</div>
     <h1>Hacker News — Top 50</h1>
   </a>
@@ -234,7 +236,7 @@ history_days = sorted(
 # Generate history index page
 history_items = ""
 for day in history_days:
-    history_items += f'<a href="{day}/index.html" class="history-item">{day}</a>\n'
+    history_items += f'<a href="{BASE}/history/{day}/index.html" class="history-item">{day}</a>\n'
 
 history_index = f'''<!DOCTYPE html>
 <html lang="en">
@@ -263,7 +265,7 @@ footer a{{color:#ff6600;text-decoration:none}}
   <div class="logo">Y</div>
   <h1>HN Daily Digest — History</h1>
   <span class="badge">{len(history_days)} days</span>
-  <a href="../index.html" class="back">← Today</a>
+  <a href="{BASE}/index.html" class="back">← Today</a>
 </header>
 <div class="list">
 {history_items}
