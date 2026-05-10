@@ -4,4 +4,4 @@ Gallery interativa com os top 50 posts do Hacker News nas últimas 24h.
 
 Atualizado diariamente via task automática.
 
-🔗 **Acesse em:** [paulo-workhero.github.io/hn-daily-digest](https://paulo-workhero.github.io/hn-daily-digest/)
+🔗 **Acesse em:** https://workhero-apps.github.io/hn-daily-digest/
