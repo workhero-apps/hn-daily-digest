@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 NOW = int(time.time())
 CUTOFF = NOW - 86400
-TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+TODAY = datetime.now(timezone.utc).strftime("%d-%m-%Y")
 SCREENSHOTS_DIR = "screenshots"
 
 def fetch_json(url):
@@ -192,8 +192,18 @@ with open(f"{HISTORY_DIR}/{TODAY}/index.html", "w", encoding="utf-8") as f:
     f.write(history_html)
 
 # Generate history index page
+def parse_history_date(d):
+    try:
+        return datetime.strptime(d, "%d-%m-%Y")
+    except ValueError:
+        try:
+            return datetime.strptime(d, "%Y-%m-%d")
+        except ValueError:
+            return datetime.min
+
 history_days = sorted(
     [d for d in os.listdir(HISTORY_DIR) if os.path.isdir(os.path.join(HISTORY_DIR, d))],
+    key=parse_history_date,
     reverse=True
 )
 
