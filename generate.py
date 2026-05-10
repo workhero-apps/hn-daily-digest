@@ -171,4 +171,77 @@ footer a{{color:#ff6600;text-decoration:none}}
 
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html)
+
+# Save a copy to history/
+HISTORY_DIR = "history"
+os.makedirs(HISTORY_DIR, exist_ok=True)
+
+# Copy today's screenshots to history
+history_ss_dir = f"{HISTORY_DIR}/{TODAY}/screenshots"
+os.makedirs(history_ss_dir, exist_ok=True)
+import shutil
+for fname in os.listdir(SCREENSHOTS_DIR):
+    src = os.path.join(SCREENSHOTS_DIR, fname)
+    dst = os.path.join(history_ss_dir, fname)
+    if os.path.isfile(src):
+        shutil.copy2(src, dst)
+
+# Write history page with relative screenshot paths
+history_html = html.replace('src="screenshots/', f'src="screenshots/')
+with open(f"{HISTORY_DIR}/{TODAY}/index.html", "w", encoding="utf-8") as f:
+    f.write(history_html)
+
+# Generate history index page
+history_days = sorted(
+    [d for d in os.listdir(HISTORY_DIR) if os.path.isdir(os.path.join(HISTORY_DIR, d))],
+    reverse=True
+)
+
+history_items = ""
+for day in history_days:
+    history_items += f'<a href="{day}/index.html" class="history-item">{day}</a>\n'
+
+history_index = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HN Daily Digest — History</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#181817;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh}}
+header{{position:sticky;top:0;z-index:100;background:#181817ee;backdrop-filter:blur(10px);border-bottom:1px solid #2e2e2d;padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}}
+.logo{{background:#ff6600;color:#fff;font-weight:700;font-size:22px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:6px}}
+header h1{{font-size:20px;font-weight:600}}
+.badge{{background:#ff660022;color:#ff6600;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px}}
+.back{{color:#ff6600;text-decoration:none;font-size:14px}}
+.back:hover{{text-decoration:underline}}
+.list{{max-width:600px;margin:40px auto;padding:0 24px}}
+.history-item{{display:block;padding:16px 20px;margin-bottom:8px;background:#212120;border:1px solid #2e2e2d;border-radius:10px;color:#e0e0e0;text-decoration:none;font-size:16px;font-weight:500;transition:border-color .2s}}
+.history-item:hover{{border-color:#ff6600;color:#ff6600}}
+footer{{text-align:center;padding:32px;color:#555;font-size:13px;border-top:1px solid #2e2e2d;margin-top:40px}}
+footer a{{color:#ff6600;text-decoration:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Y</div>
+  <h1>HN Daily Digest — History</h1>
+  <span class="badge">{len(history_days)} days</span>
+  <a href="../index.html" class="back">← Today</a>
+</header>
+<div class="list">
+{history_items}
+</div>
+<footer>
+  Data via <a href="https://github.com/HackerNews/API" target="_blank">HN API</a> ·
+  Screenshots via <a href="https://microlink.io" target="_blank">Microlink</a>
+</footer>
+</body>
+</html>'''
+
+with open(f"{HISTORY_DIR}/index.html", "w", encoding="utf-8") as f:
+    f.write(history_index)
+
 print(f"Done! Generated {len(top50)} stories for {TODAY}")
+print(f"History: {len(history_days)} days archived")
