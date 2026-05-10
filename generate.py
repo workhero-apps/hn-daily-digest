@@ -81,6 +81,30 @@ def esc(s):
 def fmt_time(epoch):
     return datetime.fromtimestamp(epoch, tz=timezone.utc).strftime("%H:%M UTC")
 
+# Pre-compute history days for the dropdown
+HISTORY_DIR = "history"
+os.makedirs(HISTORY_DIR, exist_ok=True)
+
+def parse_history_date(d):
+    try:
+        return datetime.strptime(d, "%d-%m-%Y")
+    except ValueError:
+        try:
+            return datetime.strptime(d, "%Y-%m-%d")
+        except ValueError:
+            return datetime.min
+
+history_days = sorted(
+    [d for d in os.listdir(HISTORY_DIR) if os.path.isdir(os.path.join(HISTORY_DIR, d))],
+    key=parse_history_date,
+    reverse=True
+)
+
+# Build dropdown options for the date picker
+dropdown_options = '<option value="history/index.html">All history</option>\n'
+for day in history_days:
+    dropdown_options += f'<option value="history/{day}/index.html">{day}</option>\n'
+
 cards = ""
 for i, item in enumerate(top50, 1):
     title = esc(item.get("title", "Untitled"))
@@ -126,8 +150,14 @@ html = f'''<!DOCTYPE html>
 body{{background:#181817;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh}}
 header{{position:sticky;top:0;z-index:100;background:#181817ee;backdrop-filter:blur(10px);border-bottom:1px solid #2e2e2d;padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}}
 .logo{{background:#ff6600;color:#fff;font-weight:700;font-size:22px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:6px}}
+header a.home{{text-decoration:none;display:flex;align-items:center;gap:16px}}
 header h1{{font-size:20px;font-weight:600;color:#e0e0e0}}
-header .date{{color:#888;font-size:14px}}
+header a.home:hover h1{{color:#ff6600}}
+header a.home:hover .logo{{opacity:0.85}}
+.date-picker{{position:relative;display:inline-block}}
+.date-picker select{{appearance:none;-webkit-appearance:none;background:#212120;color:#888;border:1px solid #2e2e2d;border-radius:8px;padding:4px 28px 4px 10px;font-size:14px;font-family:inherit;cursor:pointer;outline:none}}
+.date-picker select:hover{{border-color:#ff6600;color:#e0e0e0}}
+.date-picker::after{{content:"▾";position:absolute;right:10px;top:50%;transform:translateY(-50%);color:#888;pointer-events:none;font-size:12px}}
 .badge{{background:#ff660022;color:#ff6600;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px}}
 .grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding:24px;max-width:1280px;margin:0 auto}}
 @media(max-width:1100px){{.grid{{grid-template-columns:repeat(2,1fr)}}}}
@@ -153,11 +183,17 @@ footer a{{color:#ff6600;text-decoration:none}}
 </head>
 <body>
 <header>
-  <div class="logo">Y</div>
-  <h1>Hacker News — Top 50</h1>
-  <span class="date">{TODAY}</span>
+  <a href="index.html" class="home">
+    <div class="logo">Y</div>
+    <h1>Hacker News — Top 50</h1>
+  </a>
+  <div class="date-picker">
+    <select onchange="if(this.value)window.location.href=this.value">
+      <option value="" selected>{TODAY}</option>
+      {dropdown_options}
+    </select>
+  </div>
   <span class="badge">{len(top50)} stories</span>
-  <a href="history/index.html" class="badge" style="text-decoration:none">History</a>
 </header>
 <main class="grid">
 {cards}
@@ -172,10 +208,6 @@ footer a{{color:#ff6600;text-decoration:none}}
 
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html)
-
-# Save a copy to history/
-HISTORY_DIR = "history"
-os.makedirs(HISTORY_DIR, exist_ok=True)
 
 # Copy today's screenshots to history
 history_ss_dir = f"{HISTORY_DIR}/{TODAY}/screenshots"
@@ -192,22 +224,14 @@ history_html = html.replace('src="screenshots/', f'src="screenshots/')
 with open(f"{HISTORY_DIR}/{TODAY}/index.html", "w", encoding="utf-8") as f:
     f.write(history_html)
 
-# Generate history index page
-def parse_history_date(d):
-    try:
-        return datetime.strptime(d, "%d-%m-%Y")
-    except ValueError:
-        try:
-            return datetime.strptime(d, "%Y-%m-%d")
-        except ValueError:
-            return datetime.min
-
+# Refresh history_days after adding today
 history_days = sorted(
     [d for d in os.listdir(HISTORY_DIR) if os.path.isdir(os.path.join(HISTORY_DIR, d))],
     key=parse_history_date,
     reverse=True
 )
 
+# Generate history index page
 history_items = ""
 for day in history_days:
     history_items += f'<a href="{day}/index.html" class="history-item">{day}</a>\n'
