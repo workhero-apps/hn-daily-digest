@@ -129,6 +129,9 @@ header{{position:sticky;top:0;z-index:100;background:#181817ee;backdrop-filter:b
 header h1{{font-size:20px;font-weight:600;color:#e0e0e0}}
 header .date{{color:#888;font-size:14px}}
 .badge{{background:#ff660022;color:#ff6600;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px}}
+.header-spacer{{flex:1}}
+.history-link{{color:#ff6600;text-decoration:none;font-weight:600;font-size:14px;letter-spacing:0.5px}}
+.history-link:hover{{text-decoration:underline}}
 .grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding:24px;max-width:1280px;margin:0 auto}}
 @media(max-width:1100px){{.grid{{grid-template-columns:repeat(2,1fr)}}}}
 @media(max-width:720px){{.grid{{grid-template-columns:1fr}}}}
@@ -157,6 +160,8 @@ footer a{{color:#ff6600;text-decoration:none}}
   <h1>Hacker News — Top 50</h1>
   <span class="date">{TODAY}</span>
   <span class="badge">{len(top50)} stories</span>
+  <span class="header-spacer"></span>
+  <a href="history/index.html" class="history-link">HISTORY</a>
 </header>
 <main class="grid">
 {cards}
