@@ -104,6 +104,7 @@ BASE = "/hn-daily-digest"
 
 # Build dropdown options for the date picker
 dropdown_options = f'<option value="{BASE}/history/index.html">All history</option>\n'
+dropdown_options += f'<option value="{BASE}/index.html">Latest ({TODAY})</option>\n'
 for day in history_days:
     dropdown_options += f'<option value="{BASE}/history/{day}/index.html">{day}</option>\n'
 
