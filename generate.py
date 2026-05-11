@@ -106,6 +106,8 @@ BASE = "/hn-daily-digest"
 dropdown_options = f'<option value="{BASE}/history/index.html">All history</option>\n'
 dropdown_options += f'<option value="{BASE}/index.html">Today</option>\n'
 for day in history_days:
+    if day == TODAY:
+        continue
     dropdown_options += f'<option value="{BASE}/history/{day}/index.html">{day}</option>\n'
 
 cards = ""
