@@ -102,13 +102,7 @@ history_days = sorted(
 
 BASE = "/hn-daily-digest"
 
-# Build dropdown options for the date picker
-dropdown_options = f'<option value="{BASE}/history/index.html">All history</option>\n'
-dropdown_options += f'<option value="{BASE}/index.html">Today</option>\n'
-for day in history_days:
-    if day == TODAY:
-        continue
-    dropdown_options += f'<option value="{BASE}/history/{day}/index.html">{day}</option>\n'
+# Dropdown will be built dynamically via JS from days.json
 
 cards = ""
 for i, item in enumerate(top50, 1):
@@ -193,13 +187,36 @@ footer a{{color:#ff6600;text-decoration:none}}
     <h1>Hacker News — Top 50</h1>
   </a>
   <div class="date-picker">
-    <select onchange="if(this.value)window.location.href=this.value">
+    <select id="date-select" onchange="if(this.value)window.location.href=this.value">
       <option value="" selected>{TODAY}</option>
-      {dropdown_options}
     </select>
   </div>
   <span class="badge">{len(top50)} stories</span>
 </header>
+<script>
+(function(){{
+  var base="{BASE}";
+  var current="{TODAY}";
+  fetch(base+"/days.json").then(function(r){{return r.json()}}).then(function(days){{
+    var sel=document.getElementById("date-select");
+    var allOpt=document.createElement("option");
+    allOpt.value=base+"/history/index.html";
+    allOpt.textContent="All history";
+    sel.appendChild(allOpt);
+    var todayOpt=document.createElement("option");
+    todayOpt.value=base+"/index.html";
+    todayOpt.textContent="Today";
+    sel.appendChild(todayOpt);
+    days.forEach(function(day){{
+      if(day===current)return;
+      var opt=document.createElement("option");
+      opt.value=base+"/history/"+day+"/index.html";
+      opt.textContent=day;
+      sel.appendChild(opt);
+    }});
+  }}).catch(function(){{}});
+}})();
+</script>
 <main class="grid">
 {cards}
 </main>
@@ -282,6 +299,10 @@ footer a{{color:#ff6600;text-decoration:none}}
 
 with open(f"{HISTORY_DIR}/index.html", "w", encoding="utf-8") as f:
     f.write(history_index)
+
+# Save days.json for dynamic dropdown on all pages
+with open("days.json", "w", encoding="utf-8") as f:
+    json.dump(history_days, f)
 
 print(f"Done! Generated {len(top50)} stories for {TODAY}")
 print(f"History: {len(history_days)} days archived")
