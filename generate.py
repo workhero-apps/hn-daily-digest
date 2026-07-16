@@ -45,34 +45,93 @@ filtered.sort(key=lambda x: x.get("score", 0), reverse=True)
 top50 = filtered[:50]
 print(f"Found {len(filtered)} stories from last 24h, taking top {len(top50)}")
 
-# Download screenshots via Microlink
+# Capture screenshots locally with Playwright.
+#
+# The old implementation used the unauthenticated Microlink screenshot API.
+# During the week of 2026-07-10..16 that endpoint started returning many
+# HTTP 429 responses after ~25 requests, so half of the cards rendered as
+# "Screenshot unavailable". A local browser avoids that shared external quota.
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 
-def download_screenshot(args):
+def story_url(item):
+    return item.get("url") or f"https://news.ycombinator.com/item?id={item['id']}"
+
+def capture_with_playwright(items):
+    screenshot_ok = set()
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as e:
+        print(f"Playwright unavailable; falling back to Microlink: {e}")
+        return screenshot_ok
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
+        context = browser.new_context(
+            viewport={"width": 1280, "height": 720},
+            device_scale_factor=1,
+            user_agent=(
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/126.0 Safari/537.36 HNDigest/1.0"
+            ),
+            ignore_https_errors=True,
+        )
+        for idx, item in enumerate(items, 1):
+            url = story_url(item)
+            filename = f"{SCREENSHOTS_DIR}/{idx}.jpg"
+            page = context.new_page()
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=25000)
+                # Give client-rendered pages a short chance to paint, but don't
+                # block the digest for slow trackers/ads/assets.
+                page.wait_for_timeout(1200)
+                page.screenshot(path=filename, type="jpeg", quality=72, full_page=False)
+                print(f"  [{idx}] OK playwright")
+                screenshot_ok.add(idx)
+            except Exception as e:
+                print(f"  [{idx}] PLAYWRIGHT FAILED: {type(e).__name__}: {e}")
+            finally:
+                page.close()
+        context.close()
+        browser.close()
+    return screenshot_ok
+
+def download_screenshot_microlink(args):
     idx, item = args
-    url = item.get("url") or f"https://news.ycombinator.com/item?id={item['id']}"
+    url = story_url(item)
     filename = f"{SCREENSHOTS_DIR}/{idx}.jpg"
     api_url = f"https://api.microlink.io?url={urllib.parse.quote(url, safe='')}&screenshot=true&meta=false&embed=screenshot.url"
-    try:
-        req = urllib.request.Request(api_url, headers={"User-Agent": "HNDigest/1.0"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            with open(filename, "wb") as f:
-                f.write(resp.read())
-        print(f"  [{idx}] OK")
-        return idx, True
-    except Exception as e:
-        print(f"  [{idx}] FAILED: {e}")
-        return idx, False
+    for attempt in range(1, 4):
+        try:
+            req = urllib.request.Request(api_url, headers={"User-Agent": "HNDigest/1.0"})
+            with urllib.request.urlopen(req, timeout=45) as resp:
+                body = resp.read()
+                content_type = resp.headers.get("content-type", "")
+                if not (body.startswith(b"\xff\xd8") or body.startswith(b"\x89PNG")):
+                    raise ValueError(f"non-image response: {content_type}")
+                with open(filename, "wb") as f:
+                    f.write(body)
+            print(f"  [{idx}] OK microlink")
+            return idx, True
+        except Exception as e:
+            if attempt < 3:
+                time.sleep(2 * attempt)
+            else:
+                print(f"  [{idx}] FAILED: {e}")
+                return idx, False
 
-print("Downloading screenshots...")
-screenshot_ok = set()
-with ThreadPoolExecutor(max_workers=5) as executor:
-    tasks = [(i, item) for i, item in enumerate(top50, 1)]
-    for idx, ok in executor.map(download_screenshot, tasks):
+print("Capturing screenshots...")
+screenshot_ok = capture_with_playwright(top50)
+
+# Last-resort fallback for any Playwright failures. Keep this sequential and
+# retrying so that, if Microlink is ever used, it is less likely to hit 429s.
+missing = [(i, item) for i, item in enumerate(top50, 1) if i not in screenshot_ok]
+if missing:
+    print(f"Falling back to Microlink for {len(missing)} screenshots...")
+    for idx, ok in map(download_screenshot_microlink, missing):
         if ok:
             screenshot_ok.add(idx)
 
-print(f"Screenshots downloaded: {len(screenshot_ok)}/{len(top50)}")
+print(f"Screenshots captured: {len(screenshot_ok)}/{len(top50)}")
 
 def esc(s):
     if not s: return ""

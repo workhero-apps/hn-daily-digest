@@ -1,11 +1,12 @@
 name: Daily HN Digest
 
 on:
-  schedule:
-    - cron: '0 3 * * *'  # Every day at 03:00 UTC
+  # Daily scheduling is handled by the Hermes guard so there is only one
+  # generation run per day. Keeping both the GitHub schedule and the Hermes
+  # dispatch was causing duplicate screenshot batches and frequent 429s.
   push:
     branches: [main]
-  workflow_dispatch:  # Manual trigger
+  workflow_dispatch:  # Manual/Hermes trigger
 
 permissions:
   contents: write
@@ -28,6 +29,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Install screenshot browser
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
 
       - name: Remove old date format history folders
         run: |
