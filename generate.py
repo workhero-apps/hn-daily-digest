@@ -9,7 +9,7 @@ import time
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from html.parser import HTMLParser
 
 BASE = "/hn-daily-digest"
@@ -22,6 +22,37 @@ def fetch_json(url):
     req = urllib.request.Request(url, headers={"User-Agent": "HNDigest/1.0"})
     with urllib.request.urlopen(req, timeout=15) as resp:
         return json.loads(resp.read())
+
+
+def digest_date():
+    """UTC archive date, optionally overridden for a historical recovery."""
+    requested = os.environ.get("HN_DIGEST_DATE")
+    if requested:
+        return datetime.strptime(requested, "%Y-%m-%d").date()
+    return datetime.now(timezone.utc).date()
+
+
+def historical_top(target):
+    """Recover a past day from HN's Algolia archive, ordered by score."""
+    start = int(datetime.combine(target, datetime.min.time(), tzinfo=timezone.utc).timestamp())
+    end = int(datetime.combine(target + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc).timestamp())
+    query = urllib.parse.urlencode({
+        "tags": "story",
+        "numericFilters": f"created_at_i>={start},created_at_i<{end}",
+        "hitsPerPage": 1000,
+    })
+    payload = fetch_json(f"https://hn.algolia.com/api/v1/search?{query}")
+    stories = []
+    for hit in payload.get("hits", []):
+        if hit.get("title") and hit.get("objectID"):
+            stories.append({
+                "id": int(hit["objectID"]), "title": hit["title"],
+                "url": hit.get("url"), "score": hit.get("points") or 0,
+                "descendants": hit.get("num_comments") or 0,
+                "by": hit.get("author") or "anon", "time": hit.get("created_at_i") or 0,
+                "type": "story",
+            })
+    return sorted(stories, key=lambda story: story["score"], reverse=True)[:50]
 
 
 def esc(value):
@@ -284,15 +315,23 @@ def rebuild_from_archives():
 
 
 def run():
-    now = int(time.time()); today = datetime.now(timezone.utc).strftime("%d-%m-%Y")
-    print("Fetching best stories...")
-    best_ids = fetch_json("https://hacker-news.firebaseio.com/v0/beststories.json")[:200]
-    def fetch_item(item_id):
-        try: return fetch_json(f"https://hacker-news.firebaseio.com/v0/item/{item_id}.json")
-        except Exception: return None
-    with ThreadPoolExecutor(max_workers=20) as executor:
-        items = [x for x in executor.map(fetch_item, best_ids) if x]
-    top = sorted((x for x in items if x.get("type") == "story" and x.get("time", 0) >= now-86400 and x.get("score") is not None and not x.get("deleted") and not x.get("dead")), key=lambda x:x.get("score",0), reverse=True)[:50]
+    target = digest_date(); today = target.strftime("%d-%m-%Y")
+    current = datetime.now(timezone.utc).date()
+    if target < current:
+        print(f"Recovering historical stories for {target.isoformat()}...")
+        top = historical_top(target)
+    else:
+        now = int(time.time())
+        print("Fetching best stories...")
+        best_ids = fetch_json("https://hacker-news.firebaseio.com/v0/beststories.json")[:200]
+        def fetch_item(item_id):
+            try: return fetch_json(f"https://hacker-news.firebaseio.com/v0/item/{item_id}.json")
+            except Exception: return None
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            items = [x for x in executor.map(fetch_item, best_ids) if x]
+        top = sorted((x for x in items if x.get("type") == "story" and x.get("time", 0) >= now-86400 and x.get("score") is not None and not x.get("deleted") and not x.get("dead")), key=lambda x:x.get("score",0), reverse=True)[:50]
+    if not top:
+        raise RuntimeError(f"No Hacker News stories found for {target.isoformat()}")
     os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
     def screenshot(pair):
         rank, item = pair; url = item.get("url") or f"https://news.ycombinator.com/item?id={item['id']}"; path = os.path.join(SCREENSHOTS_DIR, f"{rank}.jpg")
