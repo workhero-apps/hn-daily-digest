@@ -1,6 +1,8 @@
 import json
 import os
+import sys
 import tempfile
+import types
 import unittest
 from unittest.mock import patch
 
@@ -201,6 +203,46 @@ class WeeklyAggregateTests(unittest.TestCase):
                 self.assertNotIn("<img ", page)
             finally:
                 os.chdir(old_cwd)
+
+
+class ScreenshotCaptureTests(unittest.TestCase):
+    def test_capture_screenshots_uses_local_playwright_and_returns_successful_ranks(self):
+        calls = []
+
+        class FakePage:
+            def goto(self, url, **kwargs): calls.append(("goto", url, kwargs))
+            def wait_for_timeout(self, milliseconds): calls.append(("wait", milliseconds))
+            def screenshot(self, **kwargs):
+                calls.append(("screenshot", kwargs))
+                with open(kwargs["path"], "wb") as output:
+                    output.write(b"jpeg")
+            def close(self): calls.append(("close",))
+
+        class FakeContext:
+            def new_page(self): return FakePage()
+            def close(self): calls.append(("context-close",))
+
+        class FakeBrowser:
+            def new_context(self, **kwargs): calls.append(("context", kwargs)); return FakeContext()
+            def close(self): calls.append(("browser-close",))
+
+        class FakePlaywright:
+            chromium = types.SimpleNamespace(launch=lambda **kwargs: FakeBrowser())
+
+        class FakeManager:
+            def __enter__(self): return FakePlaywright()
+            def __exit__(self, *args): return False
+
+        fake_sync = types.ModuleType("playwright.sync_api")
+        fake_sync.sync_playwright = lambda: FakeManager()
+        fake_package = types.ModuleType("playwright")
+        with tempfile.TemporaryDirectory() as tempdir, patch.dict(sys.modules, {"playwright": fake_package, "playwright.sync_api": fake_sync}):
+            successful = generate.capture_screenshots(
+                [{"id": 1, "url": "https://example.test/story"}], tempdir
+            )
+            self.assertEqual(successful, {1})
+            self.assertTrue(os.path.exists(os.path.join(tempdir, "1.jpg")))
+        self.assertIn(("goto", "https://example.test/story", {"wait_until": "domcontentloaded", "timeout": 25000}), calls)
 
 
 if __name__ == "__main__":

@@ -55,6 +55,40 @@ def historical_top(target):
     return sorted(stories, key=lambda story: story["score"], reverse=True)[:50]
 
 
+def capture_screenshots(items, screenshot_dir):
+    """Capture one local browser screenshot per story, returning successful ranks."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as error:
+        print(f"Playwright unavailable: {error}")
+        return set()
+
+    successful = set()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
+        context = browser.new_context(
+            viewport={"width": 1280, "height": 720},
+            device_scale_factor=1,
+            user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+        )
+        for rank, item in enumerate(items, 1):
+            page = context.new_page()
+            url = item.get("url") or f"https://news.ycombinator.com/item?id={item['id']}"
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=25000)
+                page.wait_for_timeout(1200)
+                page.screenshot(path=os.path.join(screenshot_dir, f"{rank}.jpg"), type="jpeg", quality=72, full_page=False)
+                successful.add(rank)
+                print(f"  [{rank}] OK playwright")
+            except Exception as error:
+                print(f"  [{rank}] PLAYWRIGHT FAILED: {type(error).__name__}: {error}")
+            finally:
+                page.close()
+        context.close()
+        browser.close()
+    return successful
+
+
 def esc(value):
     value = str(value or "")
     return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
@@ -333,14 +367,9 @@ def run():
     if not top:
         raise RuntimeError(f"No Hacker News stories found for {target.isoformat()}")
     os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
-    def screenshot(pair):
-        rank, item = pair; url = item.get("url") or f"https://news.ycombinator.com/item?id={item['id']}"; path = os.path.join(SCREENSHOTS_DIR, f"{rank}.jpg")
-        try:
-            api = f"https://api.microlink.io?url={urllib.parse.quote(url, safe='')}&screenshot=true&meta=false&embed=screenshot.url"
-            with urllib.request.urlopen(urllib.request.Request(api, headers={"User-Agent":"HNDigest/1.0"}), timeout=30) as resp, open(path,"wb") as file: file.write(resp.read())
-            return rank, True
-        except Exception as error: print(f"  [{rank}] FAILED: {error}"); return rank, False
-    with ThreadPoolExecutor(max_workers=5) as executor: ok = {rank for rank, success in executor.map(screenshot, enumerate(top, 1)) if success}
+    print("Capturing screenshots locally with Playwright...")
+    ok = capture_screenshots(top, SCREENSHOTS_DIR)
+    print(f"Screenshots captured: {len(ok)}/{len(top)}")
     stories = [story_from_item(item, rank, rank in ok) for rank, item in enumerate(top, 1)]
     folder = os.path.join(HISTORY_DIR, today); os.makedirs(os.path.join(folder, "screenshots"), exist_ok=True)
     # Only this run's successful ranks are archived; old root files cannot leak into today's archive.

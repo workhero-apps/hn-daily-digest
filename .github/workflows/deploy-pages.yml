@@ -5,7 +5,12 @@ on:
     - cron: '0 3 * * *'  # Every day at 03:00 UTC
   push:
     branches: [main]
-  workflow_dispatch:  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      digest_date:
+        description: 'UTC date to recover (YYYY-MM-DD); leave empty for today'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -20,11 +25,19 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install screenshot browser
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+
       - name: Remove old date format history folders
         run: |
           cd history 2>/dev/null && find . -maxdepth 1 -type d -regex './[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' -exec rm -rf {} + || true
 
       - name: Generate digest
+        env:
+          HN_DIGEST_DATE: ${{ inputs.digest_date }}
         run: python generate.py
 
       - name: Commit updated index.html
