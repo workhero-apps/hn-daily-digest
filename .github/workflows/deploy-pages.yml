@@ -1,10 +1,6 @@
 name: Daily HN Digest
 
 on:
-  schedule:
-    - cron: '0 3 * * *'  # Every day at 03:00 UTC
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       digest_date:
